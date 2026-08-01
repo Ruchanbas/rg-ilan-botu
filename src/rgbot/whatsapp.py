@@ -72,14 +72,25 @@ def _temizle(deger: str, azami: int = 900) -> str:
 
 def gonder(sablon: str, parametreler: list[str],
            kuru_calisma: bool = False) -> list[dict]:
-    """Template mesajı tüm alıcılara gönder. Sonuç listesi döner."""
+    """Template mesajı tüm alıcılara gönder. Sonuç listesi döner.
+
+    Her sonuç: {"ok": bool, ...}. Kuru modda {"kuru": True}. SSM'den
+    ayar okunamazsa (token/phone_id boş) ve kuru mod DEĞİLSE, bu bir
+    başarısızlıktır — sessizce "gönderildi" sayılmaz ki çağıran taraf
+    kaydı atmasın ve sonraki koşuda yeniden denesin.
+    """
     a = _ayarlar()
     temiz = [_temizle(p) for p in parametreler]
 
-    if kuru_calisma or not a["token"] or not a["phone_id"]:
+    if kuru_calisma:
         print(f"[KURU] sablon={sablon} alicilar={a['alicilar']} "
               f"parametreler={temiz}")
         return [{"kuru": True, "parametreler": temiz}]
+
+    if not a["token"] or not a["phone_id"] or not a["alicilar"]:
+        print("WhatsApp ayarı eksik (token/phone_id/alıcı) — gönderilemedi, "
+              "kayıt atılmayacak, sonraki koşuda yeniden denenecek")
+        return [{"ok": False, "sebep": "ayar_eksik"}]
 
     sonuclar = []
     for alici in a["alicilar"]:

@@ -340,9 +340,11 @@ resource "aws_iam_role" "github_actions" {
           "token.actions.githubusercontent.com:aud"        = "sts.amazonaws.com"
           "token.actions.githubusercontent.com:repository" = var.github_repo
         }
-        # AWS, GitHub OIDC icin sub (veya job_workflow_ref) kosulunu
-        # ZORUNLU tutuyor. Yeni depolarda sub degismez ID'ler iceriyor:
+        # AWS, GitHub OIDC sağlayıcısı için "sub" (veya job_workflow_ref)
+        # koşulunu ZORUNLU tutuyor. 15 Temmuz 2026 sonrası açılan
+        # depolarda sub, depo adının yanına değişmez ID'ler ekliyor:
         #   repo:sahip@<ownerId>/depo@<repoId>:ref:...
+        # Bu yüzden kalıp "repo:<sahip>@*/<depo>@*:*" biçiminde.
         StringLike = {
           "token.actions.githubusercontent.com:sub" = "repo:${local.github_owner}@*/${local.github_repo_name}@*:*"
         }

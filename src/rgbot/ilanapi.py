@@ -17,7 +17,9 @@ Keşifle doğrulanmış gerçekler (tarayıcı Network kaydı + canlı denemeler
 
 from __future__ import annotations
 
+import os
 import re
+import ssl
 import time
 from typing import Any
 
@@ -32,8 +34,28 @@ _TIMEOUT = 30
 _DENEME = 3
 _ETIKET = re.compile(r"<[^>]+>")
 
+# ilan.gov.tr sertifika zincirinde bir ara sertifikayı sunmuyor; certifi'nin
+# deposunda kök bulunmadığı için doğrulama "unable to get local issuer
+# certificate" ile düşüyor. Sistem CA deposu (Ubuntu/Debian'da genelde daha
+# zengin) çoğu durumda bu kökü içeriyor. Öncelik sırası:
+#   1. RGBOT_CA_BUNDLE (elle verilen özel bundle)
+#   2. /etc/ssl/certs/ca-certificates.crt (Linux sistem deposu — runner'da bu)
+#   3. requests varsayılanı (certifi)
+def _ca_bundle():
+    ozel = os.environ.get("RGBOT_CA_BUNDLE")
+    if ozel and os.path.exists(ozel):
+        return ozel
+    sistem = "/etc/ssl/certs/ca-certificates.crt"
+    if os.path.exists(sistem):
+        return sistem
+    return None  # requests kendi varsayılanını kullanır
+
+
+_VERIFY = _ca_bundle()
+
 
 def _istek(session: requests.Session, metod: str, url: str, **kw):
+    kw.setdefault("verify", _VERIFY if _VERIFY is not None else True)
     for i in range(_DENEME):
         try:
             r = session.request(metod, url, headers=_UA, timeout=_TIMEOUT, **kw)

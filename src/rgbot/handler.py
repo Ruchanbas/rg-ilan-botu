@@ -93,6 +93,10 @@ def bildirim_handler(event=None, context=None) -> dict:
             kuru_calisma=_KURU,
         )
         basarili = any(r.get("ok") or r.get("kuru") for r in sonuc)
+        if not basarili:
+            print(f"  !!! gonderilemedi, kayit atlaniyor (tekrar denenecek): "
+                  f"{e.get('kurum')}")
+            continue
         durum.kaydet(pdf_url, e.get("kurum", "-"), e.get("durum", "KESIN"),
                      gun, sb, kesin_mi, [], basarili)
         gonderilen += 1
@@ -112,9 +116,13 @@ def hatirlatici_handler(event=None, context=None) -> dict:
             sb_metni = date.fromisoformat(sb).strftime("%d.%m.%Y")
         except ValueError:
             sb_metni = sb
-        whatsapp.hatirlatma_gonder(
+        sonuc = whatsapp.hatirlatma_gonder(
             kurum=k.get("kurum", "-"), son_basvuru=sb_metni,
             link=k.get("pdf_url", "-"), kuru_calisma=_KURU)
+        basarili = any(r.get("ok") or r.get("kuru") for r in sonuc)
+        if not basarili:
+            print(f"Hatirlatma gonderilemedi, isaretlenmiyor: {k.get('kurum')}")
+            continue
         durum.hatirlatildi_isaretle(k["pdf_url"])
         print(f"Hatirlatma: {k.get('kurum')} — {sb_metni}")
     return {"hatirlatma": len(kayitlar)}
