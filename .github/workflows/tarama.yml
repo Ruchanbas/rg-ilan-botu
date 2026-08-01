@@ -28,33 +28,30 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Sertifika teshisi
+      - name: Eksik ara sertifikayi ekle
         run: |
-          echo "=== Sunucunun sundugu zincir ==="
-          echo | openssl s_client -connect www.ilan.gov.tr:443 \
-            -servername www.ilan.gov.tr -showcerts 2>/dev/null \
-            | grep -E "s:|i:" || true
-          echo "=== Issuer URL (eksik ara sertifika) ==="
-          echo | openssl s_client -connect www.ilan.gov.tr:443 \
-            -servername www.ilan.gov.tr 2>/dev/null \
-            | openssl x509 -noout -text 2>/dev/null \
-            | grep -A1 "CA Issuers" || true
-          echo "=== Sistem ca-certificates guncelle ==="
-          sudo apt-get update -qq && sudo apt-get install -y -qq ca-certificates
-          echo "=== Python + sistem deposu testi ==="
+          # ilan.gov.tr, GeoTrust TLS RSA CA G1 ara sertifikasini SUNMUYOR.
+          # Resmi adresten (DER formatinda) indirip PEM'e cevir, certifi
+          # bundle'inin sonuna ekle, requests'e bu genisletilmis bundle'i
+          # kullandir.
+          CERTIFI=$(python3 -c "import certifi; print(certifi.where())")
+          cp "$CERTIFI" /tmp/ca-genisletilmis.pem
+          curl -s http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt \
+            -o /tmp/ara.crt
+          openssl x509 -inform DER -in /tmp/ara.crt >> /tmp/ca-genisletilmis.pem
+          echo "Genisletilmis bundle hazir."
+          # Dogrula
           python3 -c "
-          import requests, os
-          os.environ['REQUESTS_CA_BUNDLE']='/etc/ssl/certs/ca-certificates.crt'
-          try:
-              r=requests.get('https://www.ilan.gov.tr/', timeout=15)
-              print('SISTEM DEPOSU ILE:', r.status_code)
-          except Exception as e:
-              print('SISTEM DEPOSU HATA:', str(e)[:200])
+          import requests
+          r=requests.get('https://www.ilan.gov.tr/', timeout=15,
+                         verify='/tmp/ca-genisletilmis.pem')
+          print('DOGRULAMA:', r.status_code)
           "
 
       - name: ilan.gov.tr taramasi
         env:
           RGBOT_FILTRE_JSON: filtre.json
+          RGBOT_CA_BUNDLE: /tmp/ca-genisletilmis.pem
         run: |
           python -m rgbot.toplayici --cikti sonuc.json
           cat sonuc.json
