@@ -36,13 +36,6 @@ jobs:
           python -m rgbot.toplayici --cikti sonuc.json
           cat sonuc.json
 
-      - name: OIDC token iddialarini incele
-        run: |
-          C=$(curl -sS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" | \
-            python3 -c "import sys,json,base64; t=json.load(sys.stdin)['value'].split('.')[1]; t+='='*(-len(t)%4); print(base64.urlsafe_b64decode(t).decode())")
-          echo "$C" | python3 -m json.tool | grep -E '"(sub|aud|repository|iss)"'
-
       - name: AWS kimligi (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
