@@ -4,18 +4,38 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: JS icinden API adreslerini cikar
+      - name: AdsByFilter sorgu denemeleri
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          curl -sk -A "$UA" -o main.js --max-time 60 "https://www.ilan.gov.tr/main-es2015.cbf38031e623f595be7a.js"
-          echo "main.js boyut: $(wc -c < main.js)" | tee ozet.txt
-          echo "== URL kaliplari ==" | tee -a ozet.txt
-          grep -oE 'https?://[a-zA-Z0-9./_-]+' main.js | sort | uniq -c | sort -rn | head -40 | tee -a ozet.txt
-          echo "== api gecen kisa parcalar ==" | tee -a ozet.txt
-          grep -oE '"[^"]*api[^"]*"' main.js | sort -u | head -60 | tee -a ozet.txt
-          echo "== kategori/ilan servis yollari ==" | tee -a ozet.txt
-          grep -oE '"[a-zA-Z0-9/_-]*(ilan|kategori|search|list|advert)[a-zA-Z0-9/_-]*"' main.js | sort -u | head -80 | tee -a ozet.txt
+          B="https://www.ilan.gov.tr/api/services/app"
+
+          echo "== 1) AdsByFilter bos POST ==" | tee ozet.txt
+          curl -sk -A "$UA" -X POST -H "Content-Type: application/json" \
+            -d '{"maxResultCount":3,"skipCount":0}' \
+            --max-time 30 "$B/Ad/AdsByFilter" -o d1.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
+          head -c 1500 d1.json | tee -a ozet.txt; echo | tee -a ozet.txt
+
+          echo "== 2) AdsByFilter arama terimi ile ==" | tee -a ozet.txt
+          curl -sk -A "$UA" -X POST -H "Content-Type: application/json" \
+            -d '{"maxResultCount":3,"skipCount":0,"searchText":"fizyoterapi"}' \
+            --max-time 30 "$B/Ad/AdsByFilter" -o d2.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
+          head -c 1500 d2.json | tee -a ozet.txt; echo | tee -a ozet.txt
+
+          echo "== 3) GET denemesi ==" | tee -a ozet.txt
+          curl -sk -A "$UA" --max-time 30 "$B/Ad/AdsByFilter?maxResultCount=3&skipCount=0" \
+            -o d3.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
+          head -c 800 d3.json | tee -a ozet.txt; echo | tee -a ozet.txt
+
+          echo "== 4) GetAdsByPublishTime ==" | tee -a ozet.txt
+          curl -sk -A "$UA" --max-time 30 "$B/AdHomePage/GetAdsByPublishTime" \
+            -o d4.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
+          head -c 800 d4.json | tee -a ozet.txt; echo | tee -a ozet.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: kesif2
-          path: ozet.txt
+          name: kesif3
+          path: |
+            ozet.txt
+            d1.json
+            d2.json
+            d3.json
+            d4.json
