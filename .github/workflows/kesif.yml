@@ -4,19 +4,18 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Sayfalari indir
+      - name: JS icinden API adreslerini cikar
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          echo "== varsayilan UA ==" | tee ozet.txt
-          curl -sk -o /dev/null -w "kod=%{http_code} sure=%{time_total}s\n" --max-time 20 "https://www.ilan.gov.tr/" | tee -a ozet.txt || true
-          echo "== tarayici UA anasayfa ==" | tee -a ozet.txt
-          curl -sk -A "$UA" -o anasayfa.html -w "kod=%{http_code} sure=%{time_total}s boyut=%{size_download}\n" --max-time 20 "https://www.ilan.gov.tr/" | tee -a ozet.txt || true
-          echo "== tarayici UA kategori ==" | tee -a ozet.txt
-          curl -sk -A "$UA" -o kategori.html -w "kod=%{http_code} sure=%{time_total}s boyut=%{size_download}\n" --max-time 20 "https://www.ilan.gov.tr/ilan/kategori/8/kamu-akademik-personel" | tee -a ozet.txt || true
+          curl -sk -A "$UA" -o main.js --max-time 60 "https://www.ilan.gov.tr/main-es2015.cbf38031e623f595be7a.js"
+          echo "main.js boyut: $(wc -c < main.js)" | tee ozet.txt
+          echo "== URL kaliplari ==" | tee -a ozet.txt
+          grep -oE 'https?://[a-zA-Z0-9./_-]+' main.js | sort | uniq -c | sort -rn | head -40 | tee -a ozet.txt
+          echo "== api gecen kisa parcalar ==" | tee -a ozet.txt
+          grep -oE '"[^"]*api[^"]*"' main.js | sort -u | head -60 | tee -a ozet.txt
+          echo "== kategori/ilan servis yollari ==" | tee -a ozet.txt
+          grep -oE '"[a-zA-Z0-9/_-]*(ilan|kategori|search|list|advert)[a-zA-Z0-9/_-]*"' main.js | sort -u | head -80 | tee -a ozet.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: kesif
-          path: |
-            ozet.txt
-            anasayfa.html
-            kategori.html
+          name: kesif2
+          path: ozet.txt
