@@ -4,36 +4,25 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Cift api yolu ve sema kesfi
+      - name: Swagger indir ve AdsByFilter semasini cikar
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          B="https://www.ilan.gov.tr/api/api/services/app"
-
-          echo "== 1) GetAdsByPublishTime (parametresiz, ilan ornekleri) ==" | tee ozet.txt
-          curl -sk -A "$UA" --max-time 30 "$B/AdHomePage/GetAdsByPublishTime" \
-            -o d1.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
-          head -c 2500 d1.json | tee -a ozet.txt; echo | tee -a ozet.txt
-
-          echo "== 2) AdsByFilter bos POST ==" | tee -a ozet.txt
-          curl -sk -A "$UA" -X POST -H "Content-Type: application/json" -d '{}' \
-            --max-time 30 "$B/Ad/AdsByFilter" -o d2.json -w "kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
-          head -c 2000 d2.json | tee -a ozet.txt; echo | tee -a ozet.txt
-
-          echo "== 3) Swagger denemeleri ==" | tee -a ozet.txt
-          for s in swagger/v1/swagger.json swagger/swagger.json; do
-            curl -sk -A "$UA" --max-time 20 "https://www.ilan.gov.tr/api/$s" \
-              -o sw.json -w "$s -> kod=%{http_code} boyut=%{size_download}\n" | tee -a ozet.txt
-          done
-          head -c 500 sw.json 2>/dev/null | tee -a ozet.txt; echo | tee -a ozet.txt
-
-          echo "== 4) main.js filtre alan adlari ==" | tee -a ozet.txt
-          curl -sk -A "$UA" -o main.js --max-time 60 "https://www.ilan.gov.tr/main-es2015.cbf38031e623f595be7a.js"
-          grep -oE '(searchText|searchTerm|categoryId|categoryIds|adTypeId|maxResultCount|skipCount|sorting|cityId|publishDate|startDate|endDate)[a-zA-Z]*' main.js | sort | uniq -c | sort -rn | tee -a ozet.txt
+          curl -sk -A "$UA" --max-time 30 "https://www.ilan.gov.tr/api/swagger/v1/swagger.json" -o sw.json -w "kod=%{http_code} boyut=%{size_download}\n"
+          python3 - <<'PYEOF'
+          import json
+          sw = json.load(open("sw.json"))
+          defs = sw.get("definitions") or sw.get("components", {}).get("schemas", {})
+          cikti = {}
+          for p, ops in sw.get("paths", {}).items():
+              if "AdsByFilter" in p or "GetAdDetail" in p:
+                  cikti[p] = ops
+          ilgili = {k: v for k, v in defs.items()
+                    if any(s in k.lower() for s in ["filter", "adlistdto", "addto", "pagedresult"])}
+          json.dump({"paths": cikti, "tanimlar": ilgili},
+                    open("sema.json", "w"), ensure_ascii=False, indent=1)
+          print("sema.json yazildi,", len(ilgili), "tanim")
+          PYEOF
       - uses: actions/upload-artifact@v4
         with:
-          name: kesif5
-          path: |
-            ozet.txt
-            d1.json
-            d2.json
-            sw.json
+          name: kesif6
+          path: sema.json
