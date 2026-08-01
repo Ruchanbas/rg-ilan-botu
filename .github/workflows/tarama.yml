@@ -28,14 +28,29 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: ilan.gov.tr sertifika zincirini sistem deposuna ekle
+      - name: Sertifika teshisi
         run: |
+          echo "=== Sunucunun sundugu zincir ==="
           echo | openssl s_client -connect www.ilan.gov.tr:443 \
             -servername www.ilan.gov.tr -showcerts 2>/dev/null \
-            | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' \
-            | sudo tee /usr/local/share/ca-certificates/ilangovtr.crt >/dev/null
-          sudo update-ca-certificates
-          echo "Sistem deposu guncellendi."
+            | grep -E "s:|i:" || true
+          echo "=== Issuer URL (eksik ara sertifika) ==="
+          echo | openssl s_client -connect www.ilan.gov.tr:443 \
+            -servername www.ilan.gov.tr 2>/dev/null \
+            | openssl x509 -noout -text 2>/dev/null \
+            | grep -A1 "CA Issuers" || true
+          echo "=== Sistem ca-certificates guncelle ==="
+          sudo apt-get update -qq && sudo apt-get install -y -qq ca-certificates
+          echo "=== Python + sistem deposu testi ==="
+          python3 -c "
+          import requests, os
+          os.environ['REQUESTS_CA_BUNDLE']='/etc/ssl/certs/ca-certificates.crt'
+          try:
+              r=requests.get('https://www.ilan.gov.tr/', timeout=15)
+              print('SISTEM DEPOSU ILE:', r.status_code)
+          except Exception as e:
+              print('SISTEM DEPOSU HATA:', str(e)[:200])
+          "
 
       - name: ilan.gov.tr taramasi
         env:
