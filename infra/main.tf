@@ -34,6 +34,9 @@ variable "kuru_calisma" {
 
 locals {
   ad = "rgbot"
+  # "Ruchanbas/rg-ilan-botu" -> owner="Ruchanbas", name="rg-ilan-botu"
+  github_owner     = split("/", var.github_repo)[0]
+  github_repo_name = split("/", var.github_repo)[1]
 }
 
 # ---------------------------------------------------------------------
@@ -334,11 +337,14 @@ resource "aws_iam_role" "github_actions" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:aud"        = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:repository" = var.github_repo
         }
-        # Sadece BU depo bu rolü üstlenebilir.
+        # AWS, GitHub OIDC icin sub (veya job_workflow_ref) kosulunu
+        # ZORUNLU tutuyor. Yeni depolarda sub degismez ID'ler iceriyor:
+        #   repo:sahip@<ownerId>/depo@<repoId>:ref:...
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.github_owner}@*/${local.github_repo_name}@*:*"
         }
       }
     }]
