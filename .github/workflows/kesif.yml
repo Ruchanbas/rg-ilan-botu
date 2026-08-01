@@ -4,25 +4,36 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Swagger indir ve AdsByFilter semasini cikar
+      - name: keys anahtar adlarini bul
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          curl -sk -A "$UA" --max-time 30 "https://www.ilan.gov.tr/api/swagger/v1/swagger.json" -o sw.json -w "kod=%{http_code} boyut=%{size_download}\n"
-          python3 - <<'PYEOF'
-          import json
-          sw = json.load(open("sw.json"))
-          defs = sw.get("definitions") or sw.get("components", {}).get("schemas", {})
-          cikti = {}
-          for p, ops in sw.get("paths", {}).items():
-              if "AdsByFilter" in p or "GetAdDetail" in p:
-                  cikti[p] = ops
-          ilgili = {k: v for k, v in defs.items()
-                    if any(s in k.lower() for s in ["filter", "adlistdto", "addto", "pagedresult"])}
-          json.dump({"paths": cikti, "tanimlar": ilgili},
-                    open("sema.json", "w"), ensure_ascii=False, indent=1)
-          print("sema.json yazildi,", len(ilgili), "tanim")
-          PYEOF
+          U="https://www.ilan.gov.tr/api/api/services/app/Ad/AdsByFilter"
+
+          dene() {
+            echo "== $1 ==" | tee -a ozet.txt
+            curl -sk -A "$UA" -X POST -H "Content-Type: application/json" \
+              -d "$2" --max-time 30 "$U" -o d.json -w "kod=%{http_code} " | tee -a ozet.txt
+            python3 -c "
+          import json,sys
+          try:
+            r=json.load(open('d.json'))['result']
+            print('numFound=',r.get('numFound'))
+            for a in (r.get('ads') or [])[:2]:
+              print('   *', a.get('publishStartDate','')[:10], '|', a.get('advertiserName','')[:40], '|', a.get('title','')[:60])
+          except Exception as e:
+            print('parse hatasi:', e)
+          " | tee -a ozet.txt
+          }
+
+          : > ozet.txt
+          dene "taban (bos)" '{"maxResultCount":2,"skipCount":0,"keys":{}}'
+          dene "searchText" '{"maxResultCount":2,"skipCount":0,"keys":{"searchText":"fizyoterapi"}}'
+          dene "searchtext kucuk" '{"maxResultCount":2,"skipCount":0,"keys":{"searchtext":"fizyoterapi"}}'
+          dene "query" '{"maxResultCount":2,"skipCount":0,"keys":{"query":"fizyoterapi"}}'
+          dene "categoryId 8" '{"maxResultCount":2,"skipCount":0,"keys":{"categoryId":"8"}}'
+          dene "category 8" '{"maxResultCount":2,"skipCount":0,"keys":{"category":"8"}}'
+          dene "sorting testi" '{"maxResultCount":2,"skipCount":0,"sorting":"publishStartDate desc","keys":{}}'
       - uses: actions/upload-artifact@v4
         with:
-          name: kesif6
-          path: sema.json
+          name: kesif7
+          path: ozet.txt
