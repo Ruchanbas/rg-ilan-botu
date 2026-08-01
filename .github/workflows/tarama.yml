@@ -2,13 +2,12 @@ name: ilan taramasi
 
 on:
   schedule:
-    # GitHub cron UTC. 06:00 UTC = 09:00 TRT, 15:00 UTC = 18:00 TRT
     - cron: "0 6 * * *"
     - cron: "0 15 * * *"
   workflow_dispatch:
 
 permissions:
-  id-token: write   # OIDC icin
+  id-token: write
   contents: read
 
 jobs:
@@ -28,6 +27,15 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -e .
+
+      - name: ilan.gov.tr sertifika zincirini sistem deposuna ekle
+        run: |
+          echo | openssl s_client -connect www.ilan.gov.tr:443 \
+            -servername www.ilan.gov.tr -showcerts 2>/dev/null \
+            | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' \
+            | sudo tee /usr/local/share/ca-certificates/ilangovtr.crt >/dev/null
+          sudo update-ca-certificates
+          echo "Sistem deposu guncellendi."
 
       - name: ilan.gov.tr taramasi
         env:
