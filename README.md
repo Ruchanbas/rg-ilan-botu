@@ -1,5 +1,14 @@
 # rg-ilan-botu
 
+> **Güncel kaynak: ilan.gov.tr JSON API.** Proje başta Resmî Gazete
+> HTML/PDF'lerini tarıyordu; RG tüm bulut IP'lerini (AWS + GitHub/Azure)
+> engellediği için, aynı ilanları yayımlayan ilan.gov.tr API'sine geçildi.
+> Canlı akış: `src/rgbot/toplayici.py` + `src/rgbot/ilanapi.py`.
+> RG'ye özel eski modüller (`fetcher.py`, `pdftext.py`, `segment.py`,
+> `backfill.py`) referans/yedek olarak duruyor, testleri geçiyor ama
+> canlı akışta kullanılmıyor. Kurulum ve mimari için: **KURULUM.md**.
+
+
 Resmî Gazete'de **Fizyoterapi ve Rehabilitasyon araştırma görevlisi** ilanı
 yayımlandığında WhatsApp'tan haber veren sistem. Bu repo 1. ve 2. gün işini
 kapsıyor: parser + geriye dönük tarama aracı. AWS ve WhatsApp katmanı sonraki

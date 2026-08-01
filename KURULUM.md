@@ -1,111 +1,70 @@
-# Kurulum Rehberi — GitHub Actions + AWS
+# Kurulum Rehberi — GitHub Actions + AWS (kaynak: ilan.gov.tr)
 
-## Neden bu mimari
+## Mimari ve neden böyle
 
-resmigazete.gov.tr **AWS IP aralıklarını engelliyor**. Lambda'dan
-`ConnectTimeout` alıyoruz, GitHub runner'ından ve ev bağlantısından
-200 OK dönüyor. Kanıt: aynı anda ev IP'si 0.68 sn'de 200, AWS Frankfurt
-20 sn timeout.
+resmigazete.gov.tr hem AWS hem GitHub/Azure IP'lerini engelliyor —
+Lambda'dan da runner'dan da bağlantı zaman aşımına uğruyor, ev IP'sinden
+200 dönüyor. Kaynak bu yüzden, aynı ilanları yayımlayan Basın İlan Kurumu
+portalı **ilan.gov.tr'nin JSON API'sine** taşındı. Actions'tan erişim
+canlı doğrulandı ve PDF ayrıştırma derdi tamamen kalktı.
 
-Çözüm, sorumlulukları ayırmak:
+Akış: GitHub Actions günde iki kez (09:00 ve 18:00 TRT) ilan.gov.tr
+API'sinde "fizyoterapi" araması yapar, akademik ilanları ön eler,
+detaylarını çekip eşleştiriciden geçirir (araştırma görevlisi +
+fizyoterapi, "Fiziksel Tıp" hariç), sonucu OIDC ile (depoda statik AWS
+anahtarı yok) `rgbot-bildirici` Lambda'sına gönderir. Lambda DynamoDB'de
+mükerrer kontrolü yapar, WhatsApp'a bildirir, CloudWatch metrikleri
+yazar. `rgbot-hatirlatici` son başvuruya 3 gün kala hatırlatır.
 
-```
-GitHub Actions (günde 2 kez, ücretsiz)
-  └─ siteyi tarar, PDF'leri okur, eşleşmeleri bulur
-        │  OIDC ile kimlik (statik anahtar YOK)
-        ▼
-AWS Lambda "rgbot-bildirici"
-  ├─ DynamoDB: mükerrer kontrolü
-  ├─ WhatsApp: bildirim
-  └─ CloudWatch: metrik + alarm
+API ayrıntıları (keşifle doğrulandı): POST
+`www.ilan.gov.tr/api/api/services/app/Ad/AdsByFilter` (çift "api" bilinçli),
+gövde `{"keys":{"q":["fizyoterapi"]},"skipCount":0,"maxResultCount":100}`
+— `q` dizi olmak zorunda. Detay: `AdDetail/GetAdDetail?id=..&isKiwiAd=false`.
 
-AWS Lambda "rgbot-hatirlatici" (EventBridge, günlük)
-  └─ son başvurusuna 3 gün kalanları hatırlatır
-```
+Not: ilan.gov.tr robots.txt ile otomatik erişimi kısıtlıyor. Günde 2
+koşu, 2 arama, en fazla 20 detay isteği düzeyindeki kişisel kullanım
+orantılı kabul edildi. Nezakete dikkat: sorgu sayısını artırma,
+sıklaştırma.
 
-Yan fayda: Actions durursa metrik gelmez, alarmlar "eksik veri = ihlal"
-ayarında olduğu için ateşler. Yani hem site değişikliğini hem de
-Actions'ın susmasını aynı alarm yakalar.
+## AWS tarafında değişiklik gerekmiyor
+
+Payload şeması korundu; daha önce `terraform apply` ile kurduğun her şey
+aynen çalışıyor. Metriklerden `PdfSayisi` artık "sorguların toplam
+numFound'u" anlamına geliyor (isim tarihsel, alarm tanımları bozulmasın
+diye korundu) — API şekli bozulursa sıfıra düşer ve sessiz ölüm alarmı
+çalar.
 
 ---
 
-## Adım 1 — GitHub deposu
+## Adım 1 — Kodu güncelle ve push et
 
-1. github.com → **New repository** → ad: `rg-ilan-botu` → **Private**
-   (istersen public, kod zaten sır içermiyor) → Create
-2. Proje klasöründe Git Bash:
+Yeni zip'i mevcut klasörün üstüne açtıktan sonra:
 
 ```bash
-git init
 git add .
-git commit -m "Resmi Gazete FTR arastirma gorevlisi ilan botu"
-git branch -M main
-git remote add origin https://github.com/KULLANICI_ADIN/rg-ilan-botu.git
-git push -u origin main
+git commit -m "Kaynak ilan.gov.tr API'sine tasindi"
+git push
 ```
 
-`.gitignore` zip'te var: `.venv`, `terraform.exe`, `build/`, `*.tfstate`
-gibi şeyler yüklenmez.
+## Adım 2 — İlk test
 
----
-
-## Adım 2 — Terraform ayarı
-
-`infra/terraform.tfvars` dosyasını güncelle:
-
-```bash
-printf 'alarm_email  = "ruchanbas.priv@gmail.com"\ngithub_repo  = "KULLANICI_ADIN/rg-ilan-botu"\nkuru_calisma = true\n' > infra/terraform.tfvars
-cat infra/terraform.tfvars
-```
-
-`github_repo` **birebir doğru olmalı** — sadece o depo AWS'ye
-bağlanabilecek.
-
----
-
-## Adım 3 — Altyapıyı güncelle
-
-```bash
-cd infra
-../terraform apply
-```
-
-Plan'da `rgbot-tarayici` silinip `rgbot-bildirici` oluşacak, GitHub OIDC
-kaynakları eklenecek. `yes` de.
-
-Bitince çıktıdaki **`github_rol_arn`** değerini kopyala:
-
-```bash
-../terraform output github_rol_arn
-```
-
----
-
-## Adım 4 — GitHub'a rol ARN'ini tanıt
-
-1. GitHub'da depona git → **Settings** → **Secrets and variables** →
-   **Actions**
-2. **New repository secret**
-3. Name: `AWS_ROLE_ARN`
-4. Secret: 3. adımdaki `arn:aws:iam::...:role/rgbot-github-actions`
-5. **Add secret**
-
----
-
-## Adım 5 — İlk test
-
-1. Depoda **Actions** sekmesi → **Resmî Gazete taraması**
-2. **Run workflow** → tarih kutusuna `2026-07-29` yaz → **Run workflow**
+1. Depoda **Actions** sekmesi → **ilan taramasi**
+2. **Run workflow** → **Run workflow** (parametre yok)
 3. Çalışmayı aç, adımları izle
 
-Beklenen: "Resmî Gazete'yi tara" adımında `2026-07-29: 17 PDF`, ardından
-"Sonucu AWS'ye gönder" adımında `{"tarih": "2026-07-29", "pdf": 17, ...}`
+Beklenen: "ilan.gov.tr taramasi" adımında `'fizyoterapi': numFound=...`
+satırları ve aday/eşleşme sayıları; "Sonucu AWS'ye gönder" adımında
+`{"tarih": ..., "gonderilen": N, "atlanan": M}`.
 
-**`pdf: 17` görürsen sistem uçtan uca çalışıyor demektir.**
+**numFound > 0 ve Lambda cevabı geldiyse sistem uçtan uca çalışıyor.**
+Eşleşme 0 olabilir — o an açık FTR araştırma görevlisi ilanı yok
+demektir. İlk koşuda son 20 günün aktif ilanları taranır; halihazırda
+açık başvuru varsa ilk mesajlar bu koşuda düşer.
 
----
+Bu noktada `kuru_calisma = true` olduğu için mesaj GİTMEZ, sadece
+loglanır. WhatsApp'ı bağlayınca gerçek mesaja geçeceğiz.
 
-## Adım 6 — WhatsApp
+## Adım 3 — WhatsApp
 
 1. `developers.facebook.com` → **My Apps** → **Create App** → **Other**
    → **Business**
@@ -113,7 +72,7 @@ Beklenen: "Resmî Gazete'yi tara" adımında `2026-07-29: 17 PDF`, ardından
 3. **API Setup** ekranında:
    - **Phone number ID**'yi not al (telefon numarası değil, ID)
    - **Manage phone number list** → kendi numaranı ekle, SMS ile doğrula
-   - **Ecem'in numarasını şimdi ekleme**, önce sende çalışsın
+   - Ecem'in numarasını şimdi ekleme; önce sende çalışsın
    - 5 numara sınırı var, eklendikten sonra silinemiyor
 
 ### Kalıcı token
@@ -139,7 +98,7 @@ Yeni fizyoterapi araştırma görevlisi ilanı.
 
 Kurum: {{1}}
 Birim: {{2}}
-Kadro: {{3}}
+İlan No: {{3}}
 Son başvuru: {{4}}
 İlan: {{5}}
 ```
@@ -154,9 +113,7 @@ Son başvuru: {{2}}
 İlan: {{3}}
 ```
 
----
-
-## Adım 7 — Bilgileri AWS'ye yaz
+## Adım 4 — Bilgileri AWS'ye yaz
 
 ```bash
 aws ssm put-parameter --name /rgbot/wa_token --type SecureString \
@@ -169,22 +126,17 @@ aws ssm put-parameter --name /rgbot/alicilar --type String \
   --value '["905XXXXXXXXX"]' --overwrite --region eu-central-1
 ```
 
-Numara: başında `+` yok, ülke koduyla → `905321234567`
+Numara: başında `+` yok, ülke koduyla → `905321234567`. Sonra: `history -c`
 
-Sonra: `history -c`
+## Adım 5 — Kuru modu kapat
 
----
-
-## Adım 8 — Kuru modu kapat
+`infra/terraform.tfvars` içinde `kuru_calisma = false` yap, sonra:
 
 ```bash
-printf 'alarm_email  = "ruchanbas.priv@gmail.com"\ngithub_repo  = "KULLANICI_ADIN/rg-ilan-botu"\nkuru_calisma = false\n' > infra/terraform.tfvars
 cd infra && ../terraform apply
 ```
 
----
-
-## Adım 9 — Bir hafta gözlem, sonra Ecem
+## Adım 6 — Bir hafta gözlem, sonra Ecem
 
 Sistem her gün 09:00 ve 18:00'de kendi çalışır. Bir hafta sadece sana
 mesaj gelsin, yanlış alarm var mı gör. Sonra Meta panelinden Ecem'in
@@ -201,22 +153,22 @@ Deploy gerekmez, Lambda SSM'den okuyor.
 
 ## Filtre değiştirme
 
-`filtre.json` dosyasını düzenle, commit'le, push'la. Ecem'in tezi
-bitince öğretim görevlisi ilanlarını da yakalamak için `pozisyon`
-listesine `"Öğretim Görevlisi"` ekle. Bu senaryo `test_filtre_json_yukleme`
-testiyle zaten kapsanıyor.
+`filtre.json`'u düzenle, commit'le, push'la. Alanlar:
+- `arama`: ilan.gov.tr'ye gönderilen arama terimleri (ham Türkçe)
+- `pozisyon` / `alan` / `disla`: detay metninde eşleştirme (normalize edilir)
+
+Ecem'in tezi bitince öğretim görevlisi ilanlarını da yakalamak için
+`pozisyon` listesine `"Öğretim Görevlisi"` ekle. Bu senaryo
+`test_filtre_json_yukleme` testiyle kapsanıyor.
 
 ---
 
-## Önemli uyarı — GitHub 60 gün kuralı
+## GitHub 60 gün kuralı
 
-GitHub, **60 gün commit yapılmayan depolarda zamanlanmış workflow'ları
-otomatik durduruyor.** Bot sessizce susar.
-
-İki koruma var:
-1. CloudWatch alarmı bunu yakalar (metrik gelmeyince ateşler) → mail
-2. İki ayda bir küçük bir commit at, ya da Actions sekmesinden
-   "Enable workflow" ile tekrar aç
+GitHub, 60 gün commit yapılmayan depolarda zamanlanmış workflow'ları
+otomatik durduruyor. İki koruma: (1) CloudWatch alarmı metrik gelmeyince
+ateşler → mail, (2) iki ayda bir küçük bir commit at ya da Actions'tan
+"Enable workflow" ile tekrar aç.
 
 ---
 
@@ -224,7 +176,7 @@ otomatik durduruyor.** Bot sessizce susar.
 
 | Servis | Kullanım | Sınır |
 |---|---|---|
-| GitHub Actions | ~60 dk/ay | 2000 dk/ay (özel depo), public sınırsız |
+| GitHub Actions | ~60 dk/ay | 2000 dk/ay (özel depo) |
 | Lambda | ~90 çağrı/ay | 1.000.000 |
 | DynamoDB | birkaç yazma/gün | 25 GB |
 | CloudWatch alarm | 3 | 10 |
@@ -236,12 +188,10 @@ S3 yok, VPC yok, NAT yok, ECR yok. Beklenen fatura: **0,00 dolar.**
 
 ## Portfolyo notu
 
-Bu proje anlatılırken en değerli kısım şu: veri kaynağı bulut
-sağlayıcı IP'lerini engelliyordu, mimari buna göre bölündü — toplama
-GitHub runner'larında, durum/bildirim/gözlemlenebilirlik AWS'de,
-aradaki güven OIDC federasyonuyla kuruldu (depoda statik AWS anahtarı
-yok). Buna ek olarak "sessiz ölüm" alarmı hem kaynak sitedeki değişimi
-hem de toplayıcının durmasını yakalıyor.
-
-M�lakatta "neden Lambda'yı VPC'ye koymadın" sorusunun cevabı da hazır:
-NAT Gateway ayda ~32 dolar ve bu iş için gereksiz.
+En değerli kısım kısıtla mücadele: birincil kaynak (Resmî Gazete) tüm
+bulut IP'lerini engelledi; teşhis kanıta dayandırıldı (curl ile eş
+zamanlı 200 ve timeout karşılaştırması), mimari toplama/işleme diye ikiye
+bölündü, sonra kaynak aynı verinin sunulduğu bir JSON API'sine taşınarak
+sistem hem çalışır hale getirildi hem sadeleşti. Aradaki güven OIDC
+federasyonuyla kuruldu (statik anahtar yok), sessiz ölüm alarmı hem
+kaynaktaki değişimi hem toplayıcının durmasını yakalıyor.

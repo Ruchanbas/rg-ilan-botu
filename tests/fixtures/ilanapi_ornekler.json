@@ -1,0 +1,46 @@
+{
+  "aciklama": "İlk iki ilan kesif5 turunda AdsByFilter'dan dönen GERÇEK cevaptan; üçüncüsü akademik ilan formatını taklit eden sentetik örnek",
+  "ihale_gercek": {
+    "id": "2183873", "adNo": "ILN02521074",
+    "advertiserName": "MERSİN BÜYÜKŞEHİR BELEDİYE BAŞKANLIĞI",
+    "title": "Eğitim öğretimi destekleme için konu anlatımlı föyler, yaprak test ve deneme sınavı satın alınacaktır",
+    "slugifyTitle": "ihale-duyurulari-mal-alim-ihaleleri-egitim-ogretimi-destekleme-icin-konu-anlatimli-foyler-yaprak-test-ve-deneme-sinavi-satin-alinacaktir",
+    "addressCityName": "MERSİN", "publishStartDate": "2026-07-31T00:00:00Z",
+    "isArchived": false,
+    "urlStr": "/ilan/2183873/ihale-duyurulari-mal-alim-ihaleleri-egitim-ogretimi-destekleme-icin-konu-anlatimli-foyler-yaprak-test-ve-deneme-sinavi-satin-alinacaktir",
+    "adTypeFilters": [
+      {"key": "İlan Türü", "value": "İHALE"},
+      {"key": "İhale ve Teklif Açma Tarihi", "value": "24.08.2026"}
+    ]
+  },
+  "tebligat_gercek": {
+    "id": "2184080", "adNo": "ILN02521472",
+    "advertiserName": "MARDİN 3. ASLİYE CEZA MAHKEMESİ HAKİMLİĞİ",
+    "title": "Ceza davası kararının ilanen tebliği",
+    "slugifyTitle": "tebligat-ve-duyurular-adli-ilan-ve-tebligatlar-ceza-davasi-kararinin-ilanen-tebligi",
+    "addressCityName": "MARDİN", "publishStartDate": "2026-07-31T00:00:00Z",
+    "isArchived": false,
+    "urlStr": "/ilan/2184080/tebligat-ve-duyurular-adli-ilan-ve-tebligatlar",
+    "adTypeFilters": []
+  },
+  "akademik_sentetik": {
+    "id": "9999999", "adNo": "ILN09999999",
+    "advertiserName": "ÖRNEK ÜNİVERSİTESİ REKTÖRLÜĞÜ",
+    "title": "Araştırma Görevlisi alım ilanı",
+    "slugifyTitle": "insan-kaynaklari-kamu-akademik-personel-arastirma-gorevlisi-alim-ilani",
+    "addressCityName": "ANKARA", "publishStartDate": "2026-07-30T00:00:00Z",
+    "isArchived": false,
+    "urlStr": "/ilan/9999999/insan-kaynaklari-kamu-akademik-personel-arastirma-gorevlisi-alim-ilani",
+    "adTypeFilters": [
+      {"key": "İlan Türü", "value": "Personel Alımı"},
+      {"key": "Son Başvuru Tarihi", "value": "14.08.2026"}
+    ]
+  },
+  "akademik_detay_sentetik": {
+    "content": "<p>Üniversitemiz Sağlık Bilimleri Fakültesi <b>Fizyoterapi ve Rehabilitasyon</b> Bölümüne 2547 sayılı Kanun uyarınca <b>Araştırma Görevlisi</b> alınacaktır.</p><p>Özel şart: Fizyoterapi ve Rehabilitasyon lisans mezunu olup bu alanda tezli yüksek lisans yapıyor olmak. ALES 70, YDS 50.</p>",
+    "ekBilgi": {"iletisim": "personel@ornek.edu.tr"}
+  },
+  "tip_detay_sentetik": {
+    "content": "<p>Tıp Fakültesi Dahili Tıp Bilimleri <b>Fiziksel Tıp ve Rehabilitasyon</b> Anabilim Dalına Araştırma Görevlisi alınacaktır. Uzmanlık eğitimi kapsamındadır.</p>"
+  }
+}

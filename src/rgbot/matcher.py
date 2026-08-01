@@ -49,6 +49,12 @@ class Filtreler:
     disla: list[str] = field(default_factory=lambda: [
         "fiziksel tip ve rehabilitasyon",
     ])
+    # ilan.gov.tr API'sine gönderilen arama terimleri (sunucu tarafı,
+    # normalize EDİLMEZ — site Türkçe karakterle arıyor)
+    arama: list[str] = field(default_factory=lambda: [
+        "fizyoterapi",
+        "fizik tedavi",
+    ])
 
     @classmethod
     def yukle(cls, yol: str | Path | None = None) -> "Filtreler":
@@ -58,12 +64,12 @@ class Filtreler:
         if not yol:
             return cls()
         veri = json.loads(Path(yol).read_text(encoding="utf-8"))
-        # JSON'daki terimler de normalize edilir ki kullanıcı Türkçe
-        # karakterle yazsa bile eşleşme bozulmasın.
+        # Eşleştirme terimleri normalize edilir; arama terimleri ham kalır.
         return cls(
             pozisyon=[norm(t) for t in veri.get("pozisyon", [])] or cls().pozisyon,
             alan=[norm(t) for t in veri.get("alan", [])] or cls().alan,
             disla=[norm(t) for t in veri.get("disla", [])],
+            arama=list(veri.get("arama", [])) or cls().arama,
         )
 
 
