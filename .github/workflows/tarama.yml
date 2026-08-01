@@ -1,0 +1,72 @@
+name: Resmî Gazete taraması
+
+on:
+  schedule:
+    # GitHub cron UTC çalışır. 06:00 UTC = 09:00 TRT, 15:00 UTC = 18:00 TRT
+    - cron: "0 6 * * *"
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      tarih:
+        description: "Taranacak tarih (YYYY-MM-DD, boşsa bugün)"
+        required: false
+        type: string
+
+# OIDC için gerekli: statik AWS anahtarı kullanmıyoruz
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Bağımlılıklar
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Resmî Gazete'yi tara
+        env:
+          RGBOT_FILTRE_JSON: filtre.json
+        run: |
+          if [ -n "${{ inputs.tarih }}" ]; then
+            python -m rgbot.toplayici --tarih "${{ inputs.tarih }}" --cikti sonuc.json
+          else
+            python -m rgbot.toplayici --cikti sonuc.json
+          fi
+          cat sonuc.json
+
+      - name: AWS kimliği (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Sonucu AWS'ye gönder
+        run: |
+          aws lambda invoke \
+            --function-name rgbot-bildirici \
+            --cli-binary-format raw-in-base64-out \
+            --payload file://sonuc.json \
+            cikti.json
+          cat cikti.json
+
+      - name: Tarama sonucunu sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarama-${{ github.run_number }}
+          path: |
+            sonuc.json
+            cikti.json
+          retention-days: 30
