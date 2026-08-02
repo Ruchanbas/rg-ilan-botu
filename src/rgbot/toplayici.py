@@ -159,11 +159,23 @@ def main() -> None:
     p.add_argument("--cikti", default="sonuc.json", type=Path)
     p.add_argument("--gun-esigi", default=20, type=int,
                    help="Bu kadar günden eski ilanlar atlanır")
+    p.add_argument("--telegram-kuru", action="store_true",
+                   help="Telegram'a gerçek mesaj atma, sadece logla")
     a = p.parse_args()
     sonuc = tara(gun_esigi=a.gun_esigi)
     a.cikti.write_text(json.dumps(sonuc, ensure_ascii=False),
                        encoding="utf-8")
     print(f"Yazıldı: {a.cikti}")
+
+    # Telegram kanalı (WhatsApp'tan bağımsız, yanında ikinci kanal).
+    # Token/chat_id ortam değişkeninde yoksa sessizce atlanır — yani
+    # Telegram kurulmadıysa sistem yine çalışır, sadece bu kanal susar.
+    from . import telegram
+    tg = telegram.bildir(sonuc.get("eslesmeler", []),
+                         kuru_calisma=a.telegram_kuru)
+    if tg["kanal_hazir"]:
+        print(f"Telegram: gönderilen={tg['gonderilen']} "
+              f"atlanan={tg['atlanan']}")
 
 
 if __name__ == "__main__":

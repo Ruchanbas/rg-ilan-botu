@@ -2,12 +2,13 @@ name: ilan taramasi
 
 on:
   schedule:
+    # GitHub cron UTC. 06:00 UTC = 09:00 TRT, 15:00 UTC = 18:00 TRT
     - cron: "0 6 * * *"
     - cron: "0 15 * * *"
   workflow_dispatch:
 
 permissions:
-  id-token: write
+  id-token: write   # OIDC icin
   contents: read
 
 jobs:
@@ -28,30 +29,9 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Eksik ara sertifikayi ekle
-        run: |
-          # ilan.gov.tr, GeoTrust TLS RSA CA G1 ara sertifikasini SUNMUYOR.
-          # Resmi adresten (DER formatinda) indirip PEM'e cevir, certifi
-          # bundle'inin sonuna ekle, requests'e bu genisletilmis bundle'i
-          # kullandir.
-          CERTIFI=$(python3 -c "import certifi; print(certifi.where())")
-          cp "$CERTIFI" /tmp/ca-genisletilmis.pem
-          curl -s http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt \
-            -o /tmp/ara.crt
-          openssl x509 -inform DER -in /tmp/ara.crt >> /tmp/ca-genisletilmis.pem
-          echo "Genisletilmis bundle hazir."
-          # Dogrula
-          python3 -c "
-          import requests
-          r=requests.get('https://www.ilan.gov.tr/', timeout=15,
-                         verify='/tmp/ca-genisletilmis.pem')
-          print('DOGRULAMA:', r.status_code)
-          "
-
       - name: ilan.gov.tr taramasi
         env:
           RGBOT_FILTRE_JSON: filtre.json
-          RGBOT_CA_BUNDLE: /tmp/ca-genisletilmis.pem
         run: |
           python -m rgbot.toplayici --cikti sonuc.json
           cat sonuc.json
