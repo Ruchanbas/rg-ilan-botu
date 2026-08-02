@@ -1,14 +1,14 @@
+cat > .github/workflows/tarama.yml << 'YMLEOF'
 name: ilan taramasi
 
 on:
   schedule:
-    # GitHub cron UTC. 06:00 UTC = 09:00 TRT, 15:00 UTC = 18:00 TRT
     - cron: "0 6 * * *"
     - cron: "0 15 * * *"
   workflow_dispatch:
 
 permissions:
-  id-token: write   # OIDC icin
+  id-token: write
   contents: read
 
 jobs:
@@ -29,34 +29,22 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Eksik ara sertifikayi ekle
+        run: |
+          CERTIFI=$(python3 -c "import certifi; print(certifi.where())")
+          cp "$CERTIFI" /tmp/ca-genisletilmis.pem
+          curl -s http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt -o /tmp/ara.crt
+          openssl x509 -inform DER -in /tmp/ara.crt >> /tmp/ca-genisletilmis.pem
+          python3 -c "import requests; print('DOGRULAMA:', requests.get('https://www.ilan.gov.tr/', timeout=15, verify='/tmp/ca-genisletilmis.pem').status_code)"
+
+      - name: Telegram durumunu yukle
+        uses: actions/cache@v4
+        with:
+          path: telegram_gonderilenler.json
+          key: telegram-durum-${{ github.run_id }}
+          restore-keys: |
+            telegram-durum-
+
       - name: ilan.gov.tr taramasi
         env:
           RGBOT_FILTRE_JSON: filtre.json
-        run: |
-          python -m rgbot.toplayici --cikti sonuc.json
-          cat sonuc.json
-
-      - name: AWS kimligi (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Sonucu AWS'ye gonder
-        run: |
-          aws lambda invoke \
-            --function-name rgbot-bildirici \
-            --cli-binary-format raw-in-base64-out \
-            --payload file://sonuc.json \
-            cikti.json
-          cat cikti.json
-
-      - name: Tarama kaydini sakla
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tarama-${{ github.run_number }}
-          path: |
-            sonuc.json
-            cikti.json
-          retention-days: 30
