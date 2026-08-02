@@ -1,4 +1,3 @@
-cat > .github/workflows/tarama.yml << 'YMLEOF'
 name: ilan taramasi
 
 on:
@@ -48,3 +47,35 @@ jobs:
       - name: ilan.gov.tr taramasi
         env:
           RGBOT_FILTRE_JSON: filtre.json
+          RGBOT_CA_BUNDLE: /tmp/ca-genisletilmis.pem
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+        run: |
+          python -m rgbot.toplayici --cikti sonuc.json
+          cat sonuc.json
+
+      - name: AWS kimligi (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Sonucu AWS'ye gonder
+        run: |
+          aws lambda invoke \
+            --function-name rgbot-bildirici \
+            --cli-binary-format raw-in-base64-out \
+            --payload file://sonuc.json \
+            cikti.json
+          cat cikti.json
+
+      - name: Tarama kaydini sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarama-${{ github.run_number }}
+          path: |
+            sonuc.json
+            cikti.json
+            telegram_gonderilenler.json
+          retention-days: 30
