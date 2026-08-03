@@ -1,75 +1,50 @@
 # rg-ilan-botu
 
-> **Güncel kaynak: ilan.gov.tr JSON API.** Proje başta Resmî Gazete
-> HTML/PDF'lerini tarıyordu; RG tüm bulut IP'lerini (AWS + GitHub/Azure)
-> engellediği için, aynı ilanları yayımlayan ilan.gov.tr API'sine geçildi.
-> Canlı akış: `src/rgbot/toplayici.py` + `src/rgbot/ilanapi.py`.
-> RG'ye özel eski modüller (`fetcher.py`, `pdftext.py`, `segment.py`,
-> `backfill.py`) referans/yedek olarak duruyor, testleri geçiyor ama
-> canlı akışta kullanılmıyor. Kurulum ve mimari için: **KURULUM.md**.
+**Job-posting alert system for Turkey's Official Gazette (Resmî Gazete).**
+Monitors official announcements for *Physiotherapy & Rehabilitation research assistant* positions and sends a WhatsApp notification the day one is published — instead of someone manually checking a government PDF every morning.
 
+> **Data source note:** the project originally parsed Resmî Gazete HTML/PDFs directly. RG blocks all cloud IP ranges (AWS, GitHub, Azure), so the live pipeline was migrated to the **ilan.gov.tr JSON API**, which publishes the same announcements. The RG-specific modules (`fetcher.py`, `pdftext.py`, `segment.py`, `backfill.py`) are kept as a tested reference implementation but are no longer on the live path.
 
-Resmî Gazete'de **Fizyoterapi ve Rehabilitasyon araştırma görevlisi** ilanı
-yayımlandığında WhatsApp'tan haber veren sistem. Bu repo 1. ve 2. gün işini
-kapsıyor: parser + geriye dönük tarama aracı. AWS ve WhatsApp katmanı sonraki
-adım (bkz. plan belgesi: `rg-ilan-botu-plan.md`).
+## Architecture
 
-## Kurulum
+**Current pipeline:**
 
-Proje klasöründe:
-
-**Windows (PowerShell):**
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e .
-python -m pytest            # 25 passed görmelisin
+```mermaid
+flowchart LR
+    A[ilan.gov.tr JSON API] --> B[toplayici.py<br/>collector]
+    B --> C[normalize.py<br/>Turkish-aware text normalization]
+    C --> D[matcher.py<br/>filters + match + confidence]
+    D --> E[tarih.py<br/>deadline extraction]
+    E --> F[Notification]
+    G[filtre.json<br/>config-driven filters] --> D
 ```
 
-**Mac / Linux:**
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt && pip install -e .
-python -m pytest            # 25 passed görmelisin
+**Target AWS deployment (in progress, `infra/`):**
+
+```mermaid
+flowchart LR
+    EB[EventBridge<br/>daily schedule] --> L[Lambda<br/>container image]
+    L --> DDB[(DynamoDB<br/>seen postings)]
+    L --> S3[(S3<br/>raw payloads)]
+    SSM[SSM Parameter Store<br/>filtre.json] --> L
+    L --> SNS[SNS] --> WA[WhatsApp Cloud API]
 ```
 
-`pip install -e .` paketi kayıt eder; sonrasında `rgbot-backfill` komutu
-her klasörden çalışır, PYTHONPATH ayarı gerekmez.
+## Key design decision: segment-based matching
 
-## Ne yapıyor
+A single Gazette document can contain **multiple independent job postings**. `tests/fixtures/kmu_20260416.txt` is a real example: one file contains both a research assistant posting *and* a faculty posting that mentions physiotherapy. Searching the document as a whole would produce a false positive; splitting on posting codes (e.g. `3795/1-1`) and matching per segment correctly yields zero matches for that file.
 
-```
-PDF metni ──► segmentlere_bol ──► her segment için eslesir_mi + kesinlik
-                (ilan kodundan          (pozisyon + alan aynı ilanda mı,
-                 keser: 3795/1-1)        Fiziksel Tıp dışlanır)
-```
+Both behaviors are proven in tests:
+`test_segmentasyonsuz_yanlis_alarm_verirdi` (whole-document search would false-alarm) vs. `test_segmentli_dogru_sonuc_sifir_eslesme` (segmented search is correct).
 
-Kritik tasarım kararı — **segment bazlı arama**: bir PDF'in içinde birden
-fazla bağımsız ilan olabiliyor (`tests/fixtures/kmu_20260416.txt` gerçek
-örnek: aynı dosyada hem arş.gör. ilanı hem fizyoterapi satırları içeren
-öğretim üyesi ilanı). Belge bütününde arasaydık bu dosya yanlış alarm
-verirdi; segmentli halde doğru şekilde 0 eşleşme veriyor. İkisi de testte
-kanıtlı: `test_segmentasyonsuz_yanlis_alarm_verirdi` /
-`test_segmentli_dogru_sonuc_sifir_eslesme`.
+Other things Turkish text makes non-trivial (all covered by tests):
 
-## Geriye dönük tarama (2. gün — sıradaki iş)
+- **İ/ı casing trap** — Python's default `.lower()` breaks Turkish; normalization handles it explicitly
+- Line-break healing and abbreviation variants (`Arş. Gör.` / `Arş.Gör.`)
+- **Exclusion logic** — "Fiziksel Tıp ve Rehabilitasyon" (a medical specialty) must *not* match "Fizyoterapi ve Rehabilitasyon"
+- Application-deadline extraction from the posting text, with a 15-day fallback
 
-```bash
-rgbot-backfill --baslangic 2025-08-01 --bitis 2026-08-01 --cikti tarama/
-```
-
-- İstekler arası 1 sn bekler; ~250 iş günü birkaç saat sürer.
-- Kesilirse aynı komutla devam eder (inen PDF'leri atlar).
-- Çıktı: `tarama/rapor.csv` (her PDF bir satır) ve `tarama/eslesmeler.jsonl`
-  (eşleşen segmentler + tablo satırı detayları).
-
-Bu koşu üç şeyi verir: ilanın gerçek çıkma sıklığı, filtrenin yanlış alarm
-oranı, regression testine koyulacak gerçek pozitif örnekler.
-`eslesmeler.jsonl`'deki iyi örnekleri `tests/fixtures/` altına kopyalayıp
-test yaz — golden set büyüsün.
-
-## Filtre değiştirme (deploy gerektirmez)
+## Config-driven filters (no redeploy needed)
 
 `filtre.json`:
 
@@ -81,59 +56,52 @@ test yaz — golden set büyüsün.
 }
 ```
 
-```bash
-RGBOT_FILTRE_JSON=filtre.json rgbot-backfill ...
-```
+Changing what the bot looks for is a JSON edit, not a code change. In production the same JSON is read from SSM Parameter Store. Loading is covered by `test_filtre_json_yukleme`.
 
-Ecem'in tezi bitince "Öğretim Görevlisi" satırını eklemek yetiyor —
-`test_filtre_json_yukleme` bu senaryoyu şimdiden test ediyor. Canlıda aynı
-JSON SSM Parameter Store'dan okunacak.
-
-## Neyin doğrulandığı / neyin ilk koşuda doğrulanacağı
-
-Doğrulandı (testli):
-- Türkçe normalizasyon (İ/ı tuzağı, satır kırılması, kısaltmalar)
-- Segmentasyon: gerçek çift ilanlı belgede 2 doğru segment; kod regex'i
-  tarih/saat/sütun/madde numaralarına çarpmıyor
-- Eşleştirme: pozitif, iki yönlü negatif, Fiziksel Tıp dışlaması,
-  Fizik Tedavi kapsaması, KESIN/SUPHELI ayrımı
-- Son başvuru: ilandan okuma + 15 gün fallback
-
-İlk gerçek koşuda doğrulanacak (konteynerden resmigazete.gov.tr'ye ağ
-erişimi olmadığı için lokalde koşulmalı):
-- `fetcher.py` — fihrist keşfi, cp1254 çözümü, numara yoklama fallback'i
-- `pdftext.py` — pdfplumber'ın gerçek RG PDF'lerindeki satır kırma davranışı
-  (fixture web tabanlı metin çıkarımından geldi; pdfplumber çıktısı farklı
-  kırılabilir, normalizasyon bunu tolere edecek şekilde yazıldı ama gerçek
-  veriyle görmek şart)
-
-Önerilen ilk komut (tek gün, ~1 dk):
+## Setup
 
 ```bash
-rgbot-backfill --baslangic 2026-07-29 --bitis 2026-07-29 --cikti dene/
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+python -m pytest        # expect: 25 passed
 ```
 
-29 Temmuz'da 7 üniversite ilanı vardı — `dene/rapor.csv`'de 17 satır
-görmelisin, eşleşme çıkması şart değil.
+`pip install -e .` registers the package, so the `rgbot-backfill` CLI works from any directory.
 
-## Sıradaki adımlar (plandaki 3-5. günler)
+## Backfill: scanning a year of history
 
-1. Backfill sonuçlarına göre filtre ince ayarı
-2. Terraform: EventBridge + Lambda (container) + S3 + DynamoDB + SSM + SNS
-3. WhatsApp Cloud API: test numarası, kalıcı token, utility template onayı
-4. Sessiz ölüm alarmları (SayfaBulundu/PdfSayisi metrikleri)
-5. Hatırlatıcı Lambda (son başvuruya 3 gün kala)
+```bash
+rgbot-backfill --baslangic 2025-08-01 --bitis 2026-08-01 --cikti tarama/
+```
 
-## Dizin
+- Waits 1s between requests; ~250 business days take a few hours
+- Resumable — re-running the same command skips already-downloaded documents
+- Output: `tarama/rapor.csv` (one row per document) and `tarama/eslesmeler.jsonl` (matched segments with details)
+
+The backfill answers three questions: how often the target posting actually appears, the filter's false-positive rate, and which real positives should be promoted into `tests/fixtures/` to grow the regression golden set.
+
+## Project layout
 
 ```
 src/rgbot/
-  normalize.py   Türkçe duyarlı normalizasyon (her şeyin temeli)
-  segment.py     ilan kodundan bölme
-  matcher.py     filtreler + eşleştirme + kesinlik
-  tarih.py       son başvuru çıkarımı
-  pdftext.py     pdfplumber metin/tablo katmanı
-  fetcher.py     fihrist keşfi + indirme (cp1254!)
-  backfill.py    geriye dönük tarama CLI
-tests/           25 test + gerçek belge fixture'ı
+  toplayici.py   live collector (ilan.gov.tr API)
+  ilanapi.py     API client
+  normalize.py   Turkish-aware normalization (foundation for everything)
+  matcher.py     filters + matching + confidence (KESIN / SUPHELI)
+  tarih.py       deadline extraction
+  segment.py     posting-code segmentation      (RG legacy, tested)
+  pdftext.py     pdfplumber text/table layer    (RG legacy, tested)
+  fetcher.py     index discovery + download     (RG legacy, cp1254!)
+  backfill.py    historical scan CLI
+infra/           Terraform (AWS deployment — in progress)
+tests/           25 tests + real-document fixtures
 ```
+
+## Roadmap
+
+1. Filter tuning based on backfill results
+2. Terraform: EventBridge + Lambda (container) + S3 + DynamoDB + SSM + SNS
+3. WhatsApp Cloud API integration (utility template approval)
+4. Dead-man's-switch alarms (PageFound / PdfCount metrics — a scraper that silently stops is worse than one that crashes)
+5. Reminder Lambda (3 days before the application deadline)
