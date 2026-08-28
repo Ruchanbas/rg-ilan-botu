@@ -1,0 +1,32 @@
+name: arsiv gonder
+on:
+  workflow_dispatch:
+    inputs:
+      baslangic:
+        description: "Bu tarihten sonraki ilanlar (YYYY-AA-GG)"
+        required: true
+        default: "2026-08-28"
+      kuru:
+        description: "Kuru calisma (mesaj gonderme, sadece loga yaz)"
+        type: boolean
+        default: true
+      hedef:
+        description: "Test icin tek chat id - bos birakirsan secret'taki herkese gider"
+        required: false
+        default: ""
+jobs:
+  gonder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ozeti gonder
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+          BASLANGIC: ${{ inputs.baslangic }}
+          KURU: ${{ inputs.kuru }}
+          HEDEF: ${{ inputs.hedef }}
+        run: python araclar/arsiv_gonder.py
