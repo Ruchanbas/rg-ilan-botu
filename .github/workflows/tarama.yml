@@ -1,32 +1,38 @@
 name: ilan taramasi
-
 on:
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
-
 permissions:
   id-token: write
-  contents: read
-
+  contents: write
 jobs:
   tara:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Sessiz pencere
+        id: sessiz
+        run: |
+          BUGUN=$(TZ=Europe/Istanbul date +%Y-%m-%d)
+          if [[ "$BUGUN" < "2026-12-01" ]]; then
+            echo "aktif=true" >> "$GITHUB_OUTPUT"
+            echo "SESSIZ MOD ($BUGUN) - bildirim yok, sadece arsiv"
+          else
+            echo "aktif=false" >> "$GITHUB_OUTPUT"
+            echo "NORMAL MOD ($BUGUN)"
+          fi
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Bagimliliklar
         run: |
           pip install -r requirements.txt
           pip install -e .
-
       - name: Eksik ara sertifikayi ekle
         run: |
           CERTIFI=$(python3 -c "import certifi; print(certifi.where())")
@@ -34,7 +40,6 @@ jobs:
           curl -s http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt -o /tmp/ara.crt
           openssl x509 -inform DER -in /tmp/ara.crt >> /tmp/ca-genisletilmis.pem
           python3 -c "import requests; print('DOGRULAMA:', requests.get('https://www.ilan.gov.tr/', timeout=15, verify='/tmp/ca-genisletilmis.pem').status_code)"
-
       - name: Telegram durumunu yukle
         uses: actions/cache@v4
         with:
@@ -47,19 +52,39 @@ jobs:
         env:
           RGBOT_FILTRE_JSON: filtre.json
           RGBOT_CA_BUNDLE: /tmp/ca-genisletilmis.pem
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
+          TELEGRAM_BOT_TOKEN: ${{ steps.sessiz.outputs.aktif == 'false' && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_IDS: ${{ steps.sessiz.outputs.aktif == 'false' && secrets.TELEGRAM_CHAT_IDS || '' }}
         run: |
           python -m rgbot.toplayici --cikti sonuc.json
           cat sonuc.json
 
+      - name: Arsive yaz
+        run: |
+          [ -f sonuc.json ] || exit 0
+          mkdir -p arsiv && touch arsiv/ilanlar.jsonl
+          jq -c '(.eslesmeler // [])[]' sonuc.json > /tmp/yeni.jsonl || true
+          if [ -s /tmp/yeni.jsonl ]; then
+            cat arsiv/ilanlar.jsonl /tmp/yeni.jsonl \
+              | jq -s -c 'unique_by(.pdf_url) | sort_by(.pdf_url)[]' > /tmp/birlesik.jsonl
+            mv /tmp/birlesik.jsonl arsiv/ilanlar.jsonl
+          fi
+          git config user.name "rgbot"
+          git config user.email "rgbot@users.noreply.github.com"
+          git add arsiv/ilanlar.jsonl
+          if ! git diff --cached --quiet; then
+            git commit -m "arsiv: $(date -u +%Y-%m-%d)"
+            git pull --rebase --autostash
+            git push
+          fi
+
       - name: AWS kimligi (OIDC)
+        if: steps.sessiz.outputs.aktif != 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
-
       - name: Sonucu AWS'ye gonder
+        if: steps.sessiz.outputs.aktif != 'true'
         run: |
           aws lambda invoke \
             --function-name rgbot-bildirici \
