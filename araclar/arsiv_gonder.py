@@ -21,17 +21,19 @@ def kayitlar():
 
 
 def tarih(k):
-    return str(k.get("yayim_tarihi") or k.get("tarih") or "")[:10]
+    # Arsiv kayitlarinda yayim tarihi yok; varsa onu, yoksa son basvuruyu kullan.
+    return str(k.get("yayim_tarihi") or k.get("tarih") or k.get("son_basvuru") or "")[:10]
 
 
 def satir(k):
-    p = f"- {tarih(k)} {k.get('kurum', '?')}"
+    p = f"- {k.get('kurum', '?')}"
     if k.get("birim"):
         p += f" / {k['birim']}"
     if k.get("son_basvuru"):
         p += f" (son basvuru {k['son_basvuru']})"
     if k.get("pdf_url"):
-        p += f"\n  {k['pdf_url']}"
+        # Bazi linklerde bosluk var; Telegram linki boslukta kesmesin
+        p += f"\n  {k['pdf_url'].replace(' ', '%20')}"
     return p
 
 
