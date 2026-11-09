@@ -17,7 +17,7 @@ jobs:
         id: sessiz
         run: |
           BUGUN=$(TZ=Europe/Istanbul date +%Y-%m-%d)
-          if [[ "$BUGUN" < "2026-12-01" ]]; then
+          if [[ "$BUGUN" < "2026-11-09" ]]; then
             echo "aktif=true" >> "$GITHUB_OUTPUT"
             echo "SESSIZ MOD ($BUGUN) - bildirim yok, sadece arsiv"
           else
