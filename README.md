@@ -1,13 +1,15 @@
 # rg-ilan-botu
 
-**Job-posting alert system for Turkey's Official Gazette (Resmî Gazete).**
-Monitors official announcements for *Physiotherapy & Rehabilitation research assistant* positions and sends a WhatsApp notification the day one is published — instead of someone manually checking a government PDF every morning.
+> **Status: Stopped (November 2026).** The ilan.gov.tr search API began returning 403 to GitHub Actions on 2026-09-24, and the publishing authority does not permit automated use of portal content, so the bot was shut down instead of being worked around. What happened, why it went unnoticed for 46 days, and what changes in the next version: [POSTMORTEM.md](POSTMORTEM.md) (Turkish). Scheduled workflows are disabled; the code is kept as-is. The successor will be a separate Java/Spring project with a swappable data source, using this repo as its working specification.
 
-> **Data source note:** the project originally parsed Resmî Gazete HTML/PDFs directly. RG blocks all cloud IP ranges (AWS, GitHub, Azure), so the live pipeline was migrated to the **ilan.gov.tr JSON API**, which publishes the same announcements. The RG-specific modules (`fetcher.py`, `pdftext.py`, `segment.py`, `backfill.py`) are kept as a tested reference implementation but are no longer on the live path.
+**Job-posting alert system for Turkey's Official Gazette (Resmî Gazete).**
+Monitored official announcements for *Physiotherapy & Rehabilitation research assistant* positions and notified a single user over Telegram — instead of someone manually checking a government PDF every morning.
+
+> **Data source note:** the project originally parsed Resmî Gazete HTML/PDFs directly. RG blocked the cloud IP ranges the bot ran on, so the live pipeline was migrated to the **ilan.gov.tr JSON API**, which publishes the same announcements. That API has been closed to the bot since 2026-09-24 (see [POSTMORTEM.md](POSTMORTEM.md)). The RG-specific modules (`fetcher.py`, `pdftext.py`, `segment.py`, `backfill.py`) are kept as a tested reference implementation but were not on the live path.
 
 ## Architecture
 
-**Current pipeline:**
+**Pipeline (as it ran until shutdown):**
 
 ```mermaid
 flowchart LR
@@ -19,16 +21,19 @@ flowchart LR
     G[filtre.json<br/>config-driven filters] --> D
 ```
 
-**Target AWS deployment (in progress, `infra/`):**
+**AWS side (`infra/main.tf`):** collection ran on GitHub Actions (hourly cron in `.github/workflows/tarama.yml`); the AWS side handled de-duplication, metrics and alarms.
 
 ```mermaid
 flowchart LR
-    EB[EventBridge<br/>daily schedule] --> L[Lambda<br/>container image]
+    GA[GitHub Actions<br/>collector] -- OIDC, no static keys --> L[Lambda<br/>rgbot-bildirici]
     L --> DDB[(DynamoDB<br/>seen postings)]
-    L --> S3[(S3<br/>raw payloads)]
-    SSM[SSM Parameter Store<br/>filtre.json] --> L
-    L --> SNS[SNS] --> WA[WhatsApp Cloud API]
+    L --> CW[CloudWatch metrics<br/>+ alarms] --> SNS[SNS e-mail]
+    SSM[SSM Parameter Store<br/>WhatsApp settings] --> L
+    EB[EventBridge Scheduler<br/>daily] --> R[Lambda<br/>rgbot-hatirlatici]
+    R --> DDB
 ```
+
+Telegram notifications were sent directly from the Actions job (`src/rgbot/telegram.py`).
 
 ## Key design decision: segment-based matching
 
@@ -50,13 +55,14 @@ Other things Turkish text makes non-trivial (all covered by tests):
 
 ```json
 {
-  "pozisyon": ["Araştırma Görevlisi", "Arş. Gör.", "Arş.Gör.", "Öğretim Görevlisi"],
+  "pozisyon": ["Araştırma Görevlisi", "Arş. Gör.", "Arş.Gör."],
   "alan": ["Fizyoterapi", "Fizik Tedavi ve Rehabilitasyon"],
-  "disla": ["Fiziksel Tıp ve Rehabilitasyon"]
+  "disla": ["Fiziksel Tıp ve Rehabilitasyon"],
+  "arama": ["fizyoterapi", "fizik tedavi"]
 }
 ```
 
-Changing what the bot looks for is a JSON edit, not a code change. In production the same JSON is read from SSM Parameter Store. Loading is covered by `test_filtre_json_yukleme`.
+Changing what the bot looks for is a JSON edit, not a code change. The live pipeline read this file from the repo (`RGBOT_FILTRE_JSON` in `tarama.yml`). Loading is covered by `test_filtre_json_yukleme`.
 
 ## Setup
 
@@ -64,10 +70,12 @@ Changing what the bot looks for is a JSON edit, not a code change. In production
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
-python -m pytest        # expect: 25 passed
+python -m pytest
 ```
 
 `pip install -e .` registers the package, so the `rgbot-backfill` CLI works from any directory.
+
+> The data source is currently closed to automated access, so the collector (`python -m rgbot.toplayici`) will not return data. The tests run on local fixtures and mocks and do not call ilan.gov.tr.
 
 ## Backfill: scanning a year of history
 
@@ -94,14 +102,16 @@ src/rgbot/
   pdftext.py     pdfplumber text/table layer    (RG legacy, tested)
   fetcher.py     index discovery + download     (RG legacy, cp1254!)
   backfill.py    historical scan CLI
-infra/           Terraform (AWS deployment — in progress)
-tests/           25 tests + real-document fixtures
+infra/           Terraform for the AWS side (Lambda, DynamoDB, alarms, OIDC role)
+tests/           unit tests + real-document fixtures
 ```
 
-## Roadmap
+## Roadmap (closed)
 
-1. Filter tuning based on backfill results
-2. Terraform: EventBridge + Lambda (container) + S3 + DynamoDB + SSM + SNS
-3. WhatsApp Cloud API integration (utility template approval)
-4. Dead-man's-switch alarms (PageFound / PdfCount metrics — a scraper that silently stops is worse than one that crashes)
-5. Reminder Lambda (3 days before the application deadline)
+Development in this repo has stopped. The original list, with where each item ended up:
+
+1. Filter tuning based on backfill results — not done
+2. Terraform — `infra/main.tf` defines Lambda (zip + layer, not a container), DynamoDB, SSM, EventBridge Scheduler and SNS; no S3
+3. WhatsApp Cloud API integration — client code in `src/rgbot/whatsapp.py`; notifications actually went out over Telegram
+4. Dead-man's-switch alarms (PageFound / PdfCount metrics) — defined in `infra/main.tf`; why they did not catch the September outage is explained in [POSTMORTEM.md](POSTMORTEM.md)
+5. Reminder Lambda (3 days before the application deadline) — `rgbot-hatirlatici` in `infra/main.tf`
