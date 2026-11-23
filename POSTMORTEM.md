@@ -11,7 +11,7 @@ Durum: kapatıldı, 12 Kasım 2026. Bütün saatler UTC'dir. Satır numaraları 
 - **Süre:** İlk 403, 24 Eylül 07:16'da görüldü ([run #572](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/35968738531)). Kesinti 9 Kasım 16:18 civarında fark edildi (46 gün). Workflow'lar 12 Kasım'da kapatıldı.
 - **Etkilenen çalışmalar:** 24 Eylül 07:16 ile 9 Kasım sonu arasında 214 zamanlanmış çalışma başarılı bitti. Bunların hepsinin logunda iki arama terimi için de 403 var. Aynı aralıkta 1 çalışma başka bir adımda hata verdi ([run #679](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/39043398300), "Eksik ara sertifikayi ekle" adımı), 1 çalışma da `setup-python` adımında 10 dakikalık iş zaman aşımına (`timeout-minutes: 10`) takılıp iptal oldu ([run #748](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/41123228208)). 12 Kasım'a kadar sayılınca toplam 222 zamanlanmış ve 1 elle tetiklenmiş çalışma başarılı göründü. Bu çalışmaların hiçbiri veri çekemedi.
 - **Kullanıcı:** Botun tek kullanıcısı vardı. 28 Ağustos'tan 9 Kasım'a kadar sessiz mod açıktı ve bu sürede zaten bildirim gönderilmiyordu, eşleşmeler yalnızca arşive yazılıyordu. Arşive eklenen son kayıt 22 Eylül tarihli ([`c640fc4`](https://github.com/Ruchanbas/rg-ilan-botu/commit/c640fc49ffff28b4c411efd1bbfac167a91d1a7e)). Arşivde toplam 16 kayıt var.
-- **Kaçan ilan:** Bilmiyoruz. Kesinti boyunca arama hiç sonuç döndürmediği için bu sürede eşleşen bir ilan yayımlanıp yayımlanmadığını sistemin kendi kayıtlarından çıkarmak mümkün değil. Bu dönem elle de kontrol edilmedi [DOĞRULA].
+- **Kaçan ilan:** Bilmiyoruz. Kesinti boyunca arama hiç sonuç döndürmediği için bu sürede eşleşen bir ilan yayımlanıp yayımlanmadığını sistemin kendi kayıtlarından çıkarmak mümkün değil. Bu dönem için elle yapılmış bir kontrolün kaydı da yok.
 
 ## Zaman çizelgesi
 
@@ -47,7 +47,7 @@ Sistemde "sessizlik" üç farklı şey anlamına gelebiliyordu: o gün ilan yokt
 
 **3. Alarm, planlı sessizliği arızadan ayıramıyordu.** Bu senaryo için iki alarm tanımlıydı ([main.tf:279-309](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/infra/main.tf#L279-L309)): `SayfaBulundu` metriği 3 gün üst üste 1'in altında kalırsa ve `PdfSayisi` metriği 7 gün üst üste 1'in altında kalırsa. İkisinde de eksik veri ihlal sayılıyordu (`treat_missing_data = "breaching"`). Ancak bu metrikleri yalnızca bildirim Lambda'sı yazıyordu ([handler.py:63-65](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/src/rgbot/handler.py#L63-L65)). Lambda'yı çağıran adım da sessiz modda atlanıyordu ([tarama.yml:80-94](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/.github/workflows/tarama.yml#L80-L94)). Sonuç olarak:
 
-- 28 Ağustos'tan itibaren hiç metrik gitmedi. Yapılandırmaya göre iki alarm da kesintiden haftalar önce, yaklaşık 31 Ağustos ve 4 Eylül'de, alarm durumuna geçmiş olmalı [DOĞRULA: alarmların main.tf'teki haliyle kurulu olduğu, SNS e-posta aboneliğinin onaylandığı ve bu tarihlerde alarm e-postası gelip gelmediği].
+- 28 Ağustos'tan itibaren hiç metrik gitmedi. Yapılandırmaya göre iki alarm da kesintiden haftalar önce, yaklaşık 31 Ağustos ve 4 Eylül'de, alarm durumuna geçmiş olmalı Ama alarm e-postalarının gideceği adrese yalnızca 1 Ağustos'ta SNS abonelik onay isteği geldi, sonrasında hiçbir alarm e-postası gelmedi. Yani ya abonelik hiç onaylanmadı ya da alarmlar bu yapılandırmayla kurulmadı. İki durumda da bildirim kanalı en başından beri çalışmıyordu ve bunu deneyen bir adım yoktu.
 - CloudWatch yalnızca durum değiştiğinde bildirim gönderir. Zaten alarm durumunda olan bir alarm, 24 Eylül'de gerçek arıza başladığında yeni bir bildirim üretmez.
 - 9 Kasım'da metrikler yeniden gelmeye başladığında değerler sıfırdı ([run #787](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/42652877556)). Alarm yine durum değiştirmedi.
 - Üçüncü alarm ([main.tf:265-277](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/infra/main.tf#L265-L277)) Lambda hatalarını ölçüyordu. Lambda çağrılmadığı için hata da üretmedi.
@@ -77,6 +77,7 @@ Kısacası: önceden beklenen bir alarm, hiç alarm olmamasıyla aynı sonucu ve
 5. **4xx hatalar yeniden denenmemeli.** Yalnızca geçici hatalar (zaman aşımı, 5xx) yeniden denenmeli.
 6. **Kaynak değiştirilebilir bir arayüz olmalı.** Toplama, eşleştirme ve bildirim, tek bir kaynağın veri şekline bağlı olmamalı.
 7. **Kod yazmadan önce veri kaynağının kullanım şartları kontrol edilmeli.** İstemci de kendini olduğu gibi tanıtmalı.
+8. **Bildirim kanalı kurulumda uçtan uca denenmeli.** Abonelik onayı alınmalı ve bilerek tetiklenen bir test alarmının gerçekten ulaştığı görülmeli. Hiç ulaşmamış bir alarm kanalı, alarm yokmuş gibi davranır.
 
 ## Mimari geçmiş
 
