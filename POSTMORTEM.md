@@ -8,8 +8,8 @@ Durum: kapatıldı, 12 Kasım 2026. Bütün saatler UTC'dir. Satır numaraları 
 
 ## Etki
 
-- **Süre:** İlk 403, 24 Eylül 07:16'da görüldü ([run #572](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/35968738531)). Kesinti 9 Kasım'da fark edildi (46 gün) [DOĞRULA: fark edilme anının kaydı yok, geliştiricinin beyanı]. Workflow'lar 12 Kasım'da kapatıldı.
-- **Etkilenen çalışmalar:** 24 Eylül 07:16 ile 9 Kasım sonu arasında 214 zamanlanmış çalışma başarılı bitti. Bunların hepsinin logunda iki arama terimi için de 403 var. Aynı aralıkta 1 çalışma başka bir adımda hata verdi ([run #679](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/39043398300), "Eksik ara sertifikayi ekle" adımı), 1 çalışma da iptal edildi ([run #748](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/41123228208)) [DOĞRULA: iptal nedeni]. 12 Kasım'a kadar sayılınca toplam 222 zamanlanmış ve 1 elle tetiklenmiş çalışma başarılı göründü. Bu çalışmaların hiçbiri veri çekemedi.
+- **Süre:** İlk 403, 24 Eylül 07:16'da görüldü ([run #572](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/35968738531)). Kesinti 9 Kasım 16:18 civarında fark edildi (46 gün). Workflow'lar 12 Kasım'da kapatıldı.
+- **Etkilenen çalışmalar:** 24 Eylül 07:16 ile 9 Kasım sonu arasında 214 zamanlanmış çalışma başarılı bitti. Bunların hepsinin logunda iki arama terimi için de 403 var. Aynı aralıkta 1 çalışma başka bir adımda hata verdi ([run #679](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/39043398300), "Eksik ara sertifikayi ekle" adımı), 1 çalışma da `setup-python` adımında 10 dakikalık iş zaman aşımına (`timeout-minutes: 10`) takılıp iptal oldu ([run #748](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/41123228208)). 12 Kasım'a kadar sayılınca toplam 222 zamanlanmış ve 1 elle tetiklenmiş çalışma başarılı göründü. Bu çalışmaların hiçbiri veri çekemedi.
 - **Kullanıcı:** Botun tek kullanıcısı vardı. 28 Ağustos'tan 9 Kasım'a kadar sessiz mod açıktı ve bu sürede zaten bildirim gönderilmiyordu, eşleşmeler yalnızca arşive yazılıyordu. Arşive eklenen son kayıt 22 Eylül tarihli ([`c640fc4`](https://github.com/Ruchanbas/rg-ilan-botu/commit/c640fc49ffff28b4c411efd1bbfac167a91d1a7e)). Arşivde toplam 16 kayıt var.
 - **Kaçan ilan:** Bilmiyoruz. Kesinti boyunca arama hiç sonuç döndürmediği için bu sürede eşleşen bir ilan yayımlanıp yayımlanmadığını sistemin kendi kayıtlarından çıkarmak mümkün değil. Bu dönem elle de kontrol edilmedi [DOĞRULA].
 
@@ -29,13 +29,13 @@ Durum: kapatıldı, 12 Kasım 2026. Bütün saatler UTC'dir. Satır numaraları 
 | 2026-11-09 15:46 | Sessiz modun bitiş tarihi 9 Kasım'a çekildi | [`d434dec`](https://github.com/Ruchanbas/rg-ilan-botu/commit/d434decd87bbc2c348d73fff82b857fb8bd0be46) |
 | 2026-11-09 16:00 | Arşiv gönderim aracındaki tarih filtresi hatası düzeltildi (kuru çalıştırmada bulundu) | [PR #1](https://github.com/Ruchanbas/rg-ilan-botu/pull/1) |
 | 2026-11-09 16:15 | Sessiz moddan sonraki ilk AWS çağrısı: Lambda `sayfa_bulundu=false`, `pdf_sayisi=0` aldı ve 200 döndü | [run #787](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/42652877556) |
-| 2026-11-09 | Kesinti fark edildi | [DOĞRULA] |
-| [DOĞRULA: tarih] | Basın İlan Kurumu'ndan izin istendi. Kurum, portal içeriğinin izinsiz işlenemeyeceğini ve özel entegrasyon yapılamayacağını yazılı olarak bildirdi | e-posta (yayımlanmadı) |
+| 2026-11-09 16:18 | Kesinti fark edildi: sessiz moddan çıkıştan sonraki kontrolde taramanın "Havuz: 0 ilan" döndürdüğü görüldü, ardından loglar geriye doğru incelendi | geliştiricinin çalışma notu (yayımlanmadı) |
+| 2026-11-11 | Basın İlan Kurumu'na gönderilen izin talebine yazılı cevap geldi. Kurum (Denetim ve İlan Müdürlüğü), portal içeriğinin izinsiz işlenemeyeceğini ve özel entegrasyon yapılamayacağını yazılı olarak bildirdi | e-posta (yayımlanmadı) |
 | 2026-11-12 | Üç workflow da GitHub'da devre dışı bırakıldı. YAML dosyaları değiştirilmedi | Actions ayarları |
 
 ## Kök neden
 
-ilan.gov.tr'nin arama uç noktası (`/api/api/services/app/Ad/AdsByFilter`), 24 Eylül 07:16'dan itibaren GitHub Actions runner'larından gelen isteklere `403 Forbidden` dönmeye başladı. Aynı çalışmada sitenin ana sayfası 200 döndü ([tarama.yml:42](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/.github/workflows/tarama.yml#L42)). Erişim yalnızca bu uç noktada kesildi ve sonradan hiç geri gelmedi: 572 numaralı çalışmadan sonraki hiçbir çalışmada başarılı sorgu yok. Engelin yalnızca runner IP'lerine mi, yoksa bütün otomatik erişime mi uygulandığı test edilmedi [DOĞRULA].
+ilan.gov.tr'nin arama uç noktası (`/api/api/services/app/Ad/AdsByFilter`), 24 Eylül 07:16'dan itibaren GitHub Actions runner'larından gelen isteklere `403 Forbidden` dönmeye başladı. Aynı çalışmada sitenin ana sayfası 200 döndü ([tarama.yml:42](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/.github/workflows/tarama.yml#L42)). Erişim yalnızca bu uç noktada kesildi ve sonradan hiç geri gelmedi: 572 numaralı çalışmadan sonraki hiçbir çalışmada başarılı sorgu yok. Engelin yalnızca runner IP'lerine mi, yoksa bütün otomatik erişime mi uygulandığı test edilmedi. Bu bilerek denenmedi, çünkü engeli aşma girişimi sayılırdı (bkz. "Neden engeli aşmadım").
 
 ## Neden 6 hafta fark edilmedi
 
@@ -82,8 +82,8 @@ Kısacası: önceden beklenen bir alarm, hiç alarm olmamasıyla aynı sonucu ve
 
 | Dönem | Toplama nerede | Kaynak | Neden değişti | Kanıt |
 | --- | --- | --- | --- | --- |
-| Repo öncesi [DOĞRULA: tarih] | AWS Lambda | resmigazete.gov.tr | Lambda'dan `ConnectTimeout`: site AWS IP aralıklarını engelliyordu | [handler.py:3-5](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/src/rgbot/handler.py#L3-L5) (kod yorumu) |
-| 1 Ağu 21:22 – 22:26 | GitHub Actions; bildirim, durum ve metrik Lambda'da | resmigazete.gov.tr | Runner'lardan da erişilemedi [DOĞRULA: bu tarihlerin Actions logları silinmiş durumda] | [`6a3f7b8`](https://github.com/Ruchanbas/rg-ilan-botu/commit/6a3f7b80d51d9f87dd3390ba40ea8f46ca8b472a), [toplayici.py:3-6](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/src/rgbot/toplayici.py#L3-L6) (kod yorumu) |
+| 1 Ağustos 2026 öncesi (repo kurulmadan önce, kesin tarih kayıtlı değil) | AWS Lambda | resmigazete.gov.tr | Lambda'dan `ConnectTimeout`: site AWS IP aralıklarını engelliyordu | [handler.py:3-5](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/src/rgbot/handler.py#L3-L5) (kod yorumu) |
+| 1 Ağu 21:22 – 22:26 | GitHub Actions; bildirim, durum ve metrik Lambda'da | resmigazete.gov.tr | Runner'lardan da erişilemedi. Bu çalışmaların logları GitHub'ın 90 günlük saklama süresi dolduğu için artık yok; kanıt commit ve kod yorumlarıdır | [`6a3f7b8`](https://github.com/Ruchanbas/rg-ilan-botu/commit/6a3f7b80d51d9f87dd3390ba40ea8f46ca8b472a), [toplayici.py:3-6](https://github.com/Ruchanbas/rg-ilan-botu/blob/acd5150afce0a6d00df7cacae2a8748f7f715893/src/rgbot/toplayici.py#L3-L6) (kod yorumu) |
 | 1 Ağu 22:26 – 24 Eyl 07:16 | GitHub Actions; Lambda + Telegram | ilan.gov.tr arama API'si | 403; kurum izin vermedi | [`120ecfa`](https://github.com/Ruchanbas/rg-ilan-botu/commit/120ecfaa6ce74349c3b790bf82793447cd7372c1), [run #572](https://github.com/Ruchanbas/rg-ilan-botu/actions/runs/35968738531) |
 
 Bundan sonraki adım ayrı bir proje olacak: Java/Spring ile yazılacak ve veri kaynağını değiştirilebilir bir bileşen olarak ele alacak. Bu repo o proje için şartname görevi görüyor. Eşleştirme kuralları, Türkçe metin normalizasyonu, testler ve yukarıdaki dersler oraya taşınacak.
